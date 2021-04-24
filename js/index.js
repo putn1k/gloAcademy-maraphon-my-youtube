@@ -1,6 +1,5 @@
-const gloAcademyList = document.querySelector('.glo-academy-list');
-const trendingList = document.querySelector('.trending-list');
-const musicList = document.querySelector('.music-list');
+const content = document.querySelector('.content');
+
 const subscriptionList = document.querySelector('.subscription-list');
 
 const navMenuMore = document.querySelector('.nav-menu-more');
@@ -8,15 +7,18 @@ const showMore = document.querySelector('.show-more');
 
 const formSearch = document.querySelector('.form-search');
 
+const authBtn = document.querySelector('.auth-btn');
+const userAvatar = document.querySelector('.user-avatar');
+
 const createCard = (dataVideo) => {
     const imgUrl = dataVideo.snippet.thumbnails.high.url;
     const videoId = typeof dataVideo.id === "string" ? dataVideo.id : dataVideo.id.videoId;
     const titleVideo = dataVideo.snippet.title;
-    const dateVideo = (new Date(dataVideo.snippet.publishedAt)).toLocaleString("ru-RU");
+    const dateVideo = dataVideo.snippet.publishedAt;
     const channelTitle = dataVideo.snippet.channelTitle;
     const viewCount = dataVideo.statistics ? dataVideo.statistics.viewCount : null;    
 
-    const card = document.createElement('div');
+    const card = document.createElement('li');
     card.classList.add('video-card');
     card.innerHTML = `
         <div class="video-thumb">
@@ -27,56 +29,94 @@ const createCard = (dataVideo) => {
         <h3 class="video-title">${titleVideo}</h3>
         <div class="video-info">
             <span class="video-counter">
-                ${viewCount ? `<span class="video-views">${viewCount} views</span>` : ''}                
-                <span class="video-date">${dateVideo}</span>
+                ${viewCount ? `<span class="video-views">${getViewer(viewCount)}</span>` : ''}                
+                <span class="video-date">${getDate(new Date(dateVideo))}</span>
             </span>
             <span class="video-channel">${channelTitle}</span>
         </div>
      `;
 
     return card;
-}
+};
 
-const createList = (wrapper, videoList) => {
-    wrapper.textContent = '';
+const createList = (videoList, title, clear) => {
+
+    const channel = document.createElement('section');
+    channel.classList.add('channel');
+
+    if (clear) {
+        content.textContent = '';
+    }
+
+    if (title) {
+        const header = document.createElement('h2');
+        header.textContent = title;
+        channel.insertAdjacentElement('afterbegin', header);
+    }
+
+    const wrapper = document.createElement('ul');
+    wrapper.classList.add('video-list');
+    channel.insertAdjacentElement('beforeend', wrapper);
 
     videoList.forEach(item => {
         const cards = createCard(item);
         wrapper.append(cards);
     });
+
+    content.insertAdjacentElement('beforeend', channel);
 };
 
-const addSubscribeChannel = (item) => {
-    const subscribe = document.createElement('li');
-    subscribe.classList.add('nav-item');
-    subscribe.innerHTML = `
-    <a href="https://youtu.be/${item.snippet.resourceId.channelId}" class="nav-link">
-        <img src="${item.snippet.thumbnails.default.url}" alt="Photo: Photo: ${item.snippet.title}" class="nav-image">
-        <span class="nav-text">${item.snippet.title}</span>
-    </a>
-     `;
-
-     return subscribe;
-};
-
-const createSubscriptionList = (wrapper, subscribeList) => {
-    wrapper.textContent = '';
+const createSubscriptionList =  subscribeList => {
+    subscriptionList.textContent = '';
     subscribeList.forEach(item => {
-        const subscribe = addSubscribeChannel(item);
-        wrapper.append(subscribe);
-    });
+        // console.log(item);
+        const {resourceId: {channelId: id}, title, thumbnails: {high: {url}}} = item.snippet;
+        const html = `
+        <li class="nav-item">
+            <a href="#" class="nav-link" data-channel-id="${id}" data-title="${title}">
+                <img src="${url}" alt="Photo: ${title}" class="nav-image">
+                <span class="nav-text">${title}</span>
+            </a>
+        </li>
+         `;
+        subscriptionList.insertAdjacentHTML('beforeend', html);
+    })
+};
+
+const getDate = (date) => {
+    const currentDay = Date.parse(new Date());
+    const days = Math.round((currentDay - Date.parse(date)) / 86400000);
+    if (days > 30) {
+        if (days > 60) {
+            return Math.round(days / 30) + ' month ago'
+        }
+        return 'One month ago'
+    }
+    if (days > 1) {
+        return Math.round(days) + ' days ago'
+    }
+    return ' Day ago'
+};
+
+const getViewer = count => {
+    if (count >= 1000000) {
+        return Math.round(count / 1000000) + 'M views'
+    }
+    if (count >= 1000) {
+        return Math.round(count / 1000) + 'K views'
+    }
+    return ' views'
 };
 
 //Youtube API
-
-const authBtn = document.querySelector('.auth-btn');
-const userAvatar = document.querySelector('.user-avatar');
 
 const handleSuccessAuth = data => {
     authBtn.classList.add('hide');
     userAvatar.classList.remove('hide');
     userAvatar.src = data.getImageUrl();
     userAvatar.alt = data.getName();
+
+    requestSubscriptions(createSubscriptionList);
 };
 
 const handleNoAuth = () => {
@@ -105,7 +145,7 @@ const updateStatusAuth = data => {
     } else {
         handleNoAuth();
     }
-}
+};
 
 function initClient() {
     gapi.client.init({
@@ -123,7 +163,7 @@ function initClient() {
     .catch(e => {
         console.warn(e);
     });
-}
+};
 
 gapi.load('client:auth2', initClient);
 
@@ -193,22 +233,20 @@ const requestSubscriptions = (callback, maxResults = 6) => {
 };
 
 const loadScreen = () => {
+
+    content.textContent = '';
     
     requestVideo ('UCVswRUcKC-M35RzgPRv8qUg', data => {
-        createList(gloAcademyList, data);
+        createList(data, 'GloAcademy');
     });
 
     requestTrending (data => {
-        createList(trendingList, data);
+        createList( data, 'Популярные видео');
     });
 
     requestMusic (data => {
-        createList(musicList, data);
+        createList(data, 'Популярная музыка');
     }, 12); // вывод 12 музыкальный видео
-
-    requestSubscriptions (data => {
-        createSubscriptionList(subscriptionList, data);
-    });
 
 };
 
@@ -221,7 +259,18 @@ formSearch.addEventListener('submit', (event) => {
     event.preventDefault();
     const value = formSearch.elements.search.value;
     requestSearch(value, data => {
-        console.log(data);
+        createList(data, 'Результат поиска', true);
     });
 })
 
+subscriptionList.addEventListener('click', (event) => {
+    event.preventDefault();
+    const target = event.target;
+    const linkChannel = target.closest('.nav-link');
+    const channelId = linkChannel.dataset.channelId;
+    const title = linkChannel.dataset.title;
+    
+    requestVideo(channelId, data => {
+        createList(data, title, true);
+    }, 12);
+})
